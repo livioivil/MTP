@@ -1,0 +1,344 @@
+---
+title: "The Labyrinth of Multiple Testing: how to avoid the pitfall of false positives"
+subtitle: "Introduction to Hypothesis testing"
+author: "Livio Finos and Angela Andreella"
+highlighter: highlight.js
+output:
+  prettydoc::html_pretty:
+    theme: leonids 
+    highlight: github
+    df_print: paged
+    toc: true
+    number_sections: true
+fontsize: 11pt
+geometry: margin = 1in
+mode: selfcontained
+hitheme: tomorrow
+framework: io2012
+widgets: []
+---
+
+```{r, echo = FALSE}
+m=18
+```
+
+
+In this laboratory, we will understand the concept of $H_0$, $H_1$, $\alpha$, and p-value using simple simulations.
+
+# One single hypothesis
+
+## $H_0$ true
+
+Suppose we conducted an experiment in which a new (maximum) blood pressure-lowering drug is compared with the standard drug. The response of primary interest is `Y`: the (maximum) pressure. You have three subjects in each sample.
+
+The hypothesis test of interest is the equality of the means of the two samples (new blood pressure-lowering drug vs standard drug).
+
+
+**Exercise**
+
+1. Generate a *plausible* dataset under the assumption that the two drugs are equivalent.
+
+2. Now compute a statistical test (and associated p-values) to test if the two drugs are equivalent.
+
+3. Did you reject $H_0: \mu_{standard}=\mu_{new}$? Are you surprised?
+
+
+*If you do not like the example, you can imagine a completely different example. What we are interested in is the p-value generated under the null hypothesis $H_0: \mu_{standard}=\mu_{new}$.*
+
+**Possible solution**
+
+```{r}
+set.seed(17)
+datas=data.frame(drug=c("standard","standard","standard",
+                        "new","new","new"),
+                pressure=rnorm(6,mean = 150,sd = 10))
+datas
+
+t.test(pressure~drug,data=datas)
+```
+
+Here, we suppose that the mean pressure of our three patients is $\mu=150$ with dev.std $\sigma=10$.
+
+
+**Exercise**
+
+Suppose $20$ labs do the same experiment (with the new drug that is always the same as the standard drug). 
+
+1. Generate the dataset
+
+2. How many times do you expect to reject the null hypothesis (Type I error)?
+
+3. What if there were $1000$ labs?
+
+**Possible solution**
+
+We use the previous script, at each generation we extract the p-value with `$p.value` and we replicate it `B` times with `B=20` or `B=1000` times
+
+```{r}
+B=1000
+p.values.many.experiments=replicate(B,{
+  datas=data.frame(drug=c("standard","standard","standard",
+                        "new","new","new"),
+                pressure=rnorm(6,mean = 150,sd = 10))
+  t.test(pressure~drug,data=datas)$p.value
+}
+)
+```
+
+and we count how many times the p-value $<.05$
+
+```{r}
+sum(p.values.many.experiments<.05)
+```
+
+
+> The p-value under $H_0$ is a uniform random variable in $0-1: p \sim U(0,1)$ and thus the probability of rejecting the null hypothesis incorrectly is equal to $\alpha$: $P(p\leq\alpha|H_0)=\alpha$
+
+```{r}
+hist(p.values.many.experiments,col="orange")
+sum(p.values.many.experiments<=.05)/B
+#analogously for any other significance value:
+sum(p.values.many.experiments<=.10)/B
+```
+
+
+## $H_1$ true
+
+Now suppose we have the same previous setting, but in this case the drug works! 
+
+The main interest is still `Y`: (maximum) pressure and we have three subjects in each sample.
+
+The hypothesis test of interest is the equality of the averages of the two samples.
+
+**Exercise**
+
+1. Generate a *plausible* dataset under the assumption that the two drugs are different.
+
+2. Now compute a statistical test (and associated p-values) to test if the two drugs are equivalent.
+
+3. Did you reject $H_0: \mu_{standard}=\mu_{new}$? Are you surprised?
+
+
+
+**Possible solution**
+
+
+
+```{r}
+set.seed(17)
+datas=data.frame(drug=c("standard","standard","standard",
+                        "new","new","new"),
+                pressure=rnorm(6,mean = c(150,150,150,150-30,150-30,150-30),sd = 10))
+datas
+
+t.test(pressure~drug,data=datas)
+```
+
+Here, we suppose that the mean pressure of our patients is $\mu=150$ with dev.std $\sigma=10$. The drug reduces the pressure by $30$.
+
+**Exercise**
+
+1. Check the proportion of rejections by simulation in `R`!
+
+**Possible solution**
+
+```{r}
+B=1000
+p.values.many.experiments=replicate(B,{
+  dati=data.frame(farmaco=c("standard","standard","standard",
+                          "new","new","new"),
+                  pressione=rnorm(6,mean =  c(150,150,150,150-30,150-30,150-30),sd = 10))
+  t.test(pressione~farmaco,data=dati)$p.value
+}
+)
+
+sum(p.values.many.experiments<.05)
+```
+
+> The p-value under $H_1$ is a random variable with stochastically less than a $U(0,1)$ and therefore the probability of rejecting the null hypothesis CORRECTLY is $>\alpha$: $P(p\leq\alpha|H_1)>\alpha$
+
+```{r}
+hist(p.values.many.experiments,xlim=c(0,1),col="orange")
+sum(p.values.many.experiments<=.05)/B
+#analogously for any other significance value:
+sum(p.values.many.experiments<=.10)/B
+```
+
+# Multiple hypotheses
+
+Now suppose that in the same experiment (more realistically) we evaluate multiple endpoints of interest and not just maximum pressure. For each endpoint we evaluate a hypothesis and obtain a p-value.
+
+## $H_0$ true
+
+**Exercise**
+
+1. Simulate `r B` clinical trials with `r m` endpoints under $H_0$,
+
+2. Evaluate the empirical distribution of the **number of rejections** in each trial, 
+
+3. Evaluate the fraction of experiments in which **at least one error** was made,
+
+considering two different thresholds:
+
+- `alpha_a=.05` 
+- `alpha_b=1-(1-.05)^(1/m)=` `r 1-(1-.05)^(1/m)` (Sidak's correction)
+
+**Possible solution**
+
+```{r}
+m=18
+B = 1000
+alpha_a=.05
+alpha_b=1-(1-.05)^(1/m)
+#### A single experiment with m endpoints (and as many hypothesis tests and p-values).
+
+endpoints=matrix(rnorm(6*m),6,m)
+
+p.values.1.experiment=apply(endpoints , 2, 
+                            function(y) 
+                              t.test(y[1:3],y[4:6],
+                                     var.equal = TRUE)$p.value)
+
+ c(n.rifiuti_a=sum(p.values.1.experiment<alpha_a),
+   n.rifiuti_b=sum(p.values.1.experiment<alpha_b))
+
+# replicate B times
+res=replicate(B,
+              {
+ endpoints=matrix(rnorm(6*m),6,m)
+ 
+ p.values.1.experiment=apply(endpoints , 2, 
+                             function(y) t.test(y[1:3],y[4:6],
+                                                var.equal = TRUE)$p.value)
+ c(n.rifiuti_a=sum(p.values.1.experiment<alpha_a),
+   n.rifiuti_b=sum(p.values.1.experiment<alpha_b))
+}
+)
+dim(res)
+#Number of rejections:
+table(res["n.rifiuti_a",])
+# How many times have we made at least one mistake? (= how many times at least one rejection?)
+sum(res["n.rifiuti_a",]>0)
+
+table(res["n.rifiuti_b",])
+sum(res["n.rifiuti_b",]>0)
+```
+## $H_1$ true
+
+Let us now assume that the drug affects the first $5$ endpoints and not the others.
+
+**Exercise**
+
+1. Simulate `r B` clinical trials with `r m` endpoints where the drug affects the first 5 endpoints. 
+
+2. Evaluate the empirical distribution of the **number of rejections** in each trial. 
+
+3. Evaluate the fraction of experiments in which **at least one error** was made.
+
+4. Evaluate the fraction of experiments in which **at least one true discovery** was made.
+
+considering again two different thresholds:
+
+- `alpha_a=.05` 
+- `alpha_b=1-(1-.05)^(1/m)=` `r 1-(1-.05)^(1/m)` (Sidak's correction)
+
+After the simulation, answer the following questions:
+
+- Does `alpha_a=.05` controls the the FWER at level `0.05`?
+- Does `alpha_b=1-(1-.05)^(1/m)` controls the the FWER at level `0.05`?
+- Which method do you prefer?
+
+
+**Possible solution**
+
+```{r}
+#number of endpoints
+m <- 18
+# Generate the response of 6 patients on m enpoint.
+endpoints=matrix(rnorm(6*m),6,m)
+ 
+# Added a value of 3 to the values reported 
+# to the first 5 endpoints for the three patients with the drug new 
+
+endpoints[4:6,1:5]= endpoints[4:6,1:5]+3
+ 
+endpoints
+```
+
+Let's compute the p-values:
+
+```{r}
+#One p-value for each endpoint extracted from t.test:
+
+p.values.1.experiment=apply(endpoints , 2, 
+                            function(y) t.test(y[1:3],y[4:6])$p.value)
+
+
+p.values.1.experiment
+```
+
+
+The first 5 p-values tend to have lower values than the others (I reject those hypotheses several times).
+
+```{r}
+#Compute:
+ c(n.rifiuti_a=sum(p.values.1.experiment<alpha_a), #number of rejections using alpha_a=0.05
+   n.rifiuti_b=sum(p.values.1.experiment<alpha_b),#number of rejections using alpha_b (i.e., Sidak correction)
+   n.rifiuti_a_H0=sum(p.values.1.experiment[-(1:5)]<alpha_a), #number of false rejections using alpha_a=0.05
+   n.rifiuti_b_H0=sum(p.values.1.experiment[-(1:5)]<alpha_b), #number of false rejections using alpha_b (i.e., Sidak correction)
+   n.rifiuti_a_H1=sum(p.values.1.experiment[1:5]<alpha_a), #number of true rejections using alpha_a=0.05
+   n.rifiuti_b_H1=sum(p.values.1.experiment[1:5]<alpha_b) #number of true rejections using alpha_b (i.e., Sidak correction)
+   )
+```
+
+
+*In applications to real data we obviously do NOT know which hypotheses are under $H_0$ (the two drugs are equal) and which are under $H_1$ (the new drug is better).*
+
+Let's replicate $B$ times using the `replicate` function:
+
+```{r}
+res = replicate(B, {
+  endpoints=matrix(rnorm(6*m),6,m)
+  endpoints[4:6,1:5]= endpoints[4:6,1:5]+3
+  
+  p.values.1.experiment=apply(endpoints , 2, 
+                            function(y) t.test(y[1:3],y[4:6])$p.value)
+  
+ c(n.rifiuti_a=sum(p.values.1.experiment<alpha_a), 
+   n.rifiuti_b=sum(p.values.1.experiment<alpha_b),
+   n.rifiuti_a_H0=sum(p.values.1.experiment[-(1:5)]<alpha_a), 
+   n.rifiuti_b_H0=sum(p.values.1.experiment[-(1:5)]<alpha_b),
+   n.rifiuti_a_H1=sum(p.values.1.experiment[1:5]<alpha_a), 
+   n.rifiuti_b_H1=sum(p.values.1.experiment[1:5]<alpha_b) 
+   )
+})
+```
+
+Let's see for example the distribution of rejections considering $\alpha = 0.05$ is:
+
+```{r}
+table(res[1,])
+```
+and the distribution of false rejections:
+
+
+```{r}
+table(res[3,])
+```
+
+and compute the fraction of experiments in which at least one error was made:
+
+
+```{r}
+rowSums(res[c(3,4), ]>0)/B
+```
+The distribution of true rejections:
+
+```{r}
+table(res[5,])
+```
+
+```{r}
+rowSums(res[c(5,6), ]/5)/B
+```
+

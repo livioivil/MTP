@@ -1,0 +1,753 @@
+---
+title: "The Labyrinth of Multiple Testing: how to avoid the pitfall of false positives"
+subtitle: "FWER control"
+author: "Livio Finos and Angela Andreella"
+highlighter: highlight.js
+output:
+  prettydoc::html_pretty:
+    theme: leonids 
+    highlight: github
+    df_print: paged
+    toc: true
+    number_sections: true
+fontsize: 11pt
+geometry: margin = 1in
+mode: selfcontained
+hitheme: tomorrow
+framework: io2012
+widgets: []
+---
+
+
+
+Suppose these are the p-values obtained from your last experiment:
+
+```{r}
+m=15
+(p.values=runif(m))
+```
+
+How many rejections?
+
+```{r}
+alpha = 0.05
+(p.values < alpha)
+sum(p.values < alpha)
+```
+
+
+# Familywise Error Rate
+
+In hypothesis testing, the probability of committing a Type I error is controlled at a set level $\alpha$, conventionally $5\%$. However, a problem arises when we conduct not just one test, but more than one. Since for each test we have a probability of committing a type I error, if we conduct many tests it is likely to get at least one type I error. 
+
+The multiple testing problem has a simple structure. 
+
+We have a set of null hypotheses $\mathcal{H}=(H_1,\ldots,H_m)$, of which an unknown number $m_0$ are true, while the remaining $m-m_0$ are false. 
+
+We denote the subset of true hypotheses by $\mathcal{T}\subseteq \mathcal{H}$, the subset of false hypotheses by $\mathcal{F}=\mathcal{H}\setminus \mathcal{T}$ and 
+the proportion of true hypotheses with $\pi_0=m_0/m$. 
+
+The goal of multiple testing procedures is to choose a subset $\mathcal{R}\subseteq \mathcal{H}$ of hypotheses to reject. Suppose we have available the p-values $p_1,\ldots,p_m$ for each hypothesis $H_1,\ldots,H_m$. We can consider the following procedure:
+
+$$\mathcal{R}=\{H_i: p_i \leq \tilde{\alpha}\}$$
+
+that is, reject all hypotheses whose p-values are less than some threshold $\tilde{\alpha}$. The problem now is to determine this threshold $\tilde{\alpha}$.
+
+
+Ideally, the set of rejected hypotheses $\mathcal{R}$ should coincide as closely as possible with the set of false hypotheses $\mathcal{F}$. Two types of errors can be made: 
+
+* type I errors $\mathcal{R}\cap \mathcal{T}$, that is, rejecting true hypotheses,  
+
+* type II errors $\mathcal{R}\setminus \mathcal{F}$, that is, not rejecting false hypotheses. 
+
+We can summarize the number of errors made in the following table:
+
+Assumptions | False | True | Total
+------------- | ------------- | ------------- | -------------
+rejected | $S$ | $V$ | $R$ 
+not rejected | $T$ | $U$ | $m-R$
+total | $m_1$ | $m_0$ | $m$
+
+We know the total number of hypotheses $m$ and the number of rejected hypotheses $R=\#\mathcal{R}$, but all other table quantities are unknown. 
+
+Methods of *multiple testing* try to reject as many hypotheses as possible while trying to control the number $V$ of type I errors. 
+
+
+The *familywise error rate* is defined as.
+\[
+\mathrm{FWER}=\Pr(V > 0)
+\]
+that is, the probability of committing at least one type I error. 
+Using the procedure reject $H_i$ if $p_i \leq \tilde{\alpha}$
+
+we get
+\[
+\mathrm{FWER}= \Pr\left(\bigcup_{i: H_i \in \mathcal{T}} \{ P_i \leq \tilde{\alpha} \}\right)
+\]
+
+
+Controlling the *familywise error rate* at a $\alpha$ level requires that
+\[
+\mathrm{FWER}\leq \alpha.
+\]
+
+
+
+## Sidak's inequality: independent P-values.
+
+In our example, we are in the following situation:
+
+* the $m=$ `r m` hypotheses are all true, i.e. $m_0=m$;
+
+* the `r m` tests, and thus the related p-values, are independent of each other;
+
+* without regard to the multiplicity of the tests, we reject $H_i$ when $p_i \leq \alpha$.
+
+
+We denote by $E_i=I\{P_i \leq \alpha\}$ the outcome of the test, i.e., through the indicator function which is 1 if we reject the hypothesis, 0 otherwise. 
+
+Since the hypotheses are all true, the p-values $P_1,\ldots,P_m$ are i.i.d. $\mathrm{Uniform}(0,1)$.
+It follows that $E_i \sim \mathrm{Bernoulli}(\alpha)$ and $V = \sum_{i=1}^{m}E_i \sim \mathrm{Binomial}(n,\alpha)$. Then the familywise error rate results in.
+\[
+\mathrm{FWER}= \Pr(V > 0) = \Pr(\sum_{i=1}^{m}E_i > 0) = 1 - \Pr(\sum_{i=1}^{m}E_i = 0) = 1 - (1-\alpha)^m
+\]
+or equivalently
+\[
+\mathrm{FWER}= \Pr\left(\bigcup_{i=1}^{m} \{ P_i \leq \alpha \} \right) = 1- \Pr\left(\bigcap_{i=1}^{m} \{ P_i > \alpha \right) = 1- \prod_{i=1}^{m} \Pr\left( P_i > \alpha \right) =1 - (1-\alpha)^m
+\]
+
+
+that is, for $m=$ `r m`
+```{r}  
+1 - (1-alpha)^(m) 
+```
+
+Let us try to represent the *familywise error rate* as a function of the number of the number of hypotheses $m$ (again assuming $m_0=m$)
+```{r}  
+# m = 100
+FWER<- 1-(1-alpha)^(1:100)
+plot(1:100,FWER,xlab="number of hypotheses", ylab="FWER")
+```
+
+To control FWER at a $\alpha$ level, we need to modify our rejection rule:
+
+- we reject $H_i$ when $p_i \leq \tilde{\alpha}$.
+
+Solving $\mathrm{FWER}= 1 - (1-\tilde{\alpha})^m = \alpha$ we get 
+\[
+\tilde{\alpha} = 1-(1-\alpha)^{(1/m)}
+\]
+or 
+```{r}  
+alpha.adj<-1 - (1-alpha)^(1/m) 
+alpha.adj
+(p.values < alpha.adj)
+```
+
+Equivalently, we can consider the rejection rule:
+
+* we reject the hypothesis $H_i$ when $\tilde{p}_{i} \leq \alpha$
+
+where
+\[
+\tilde{p}_i = 1- (1- p_i)^{m}
+\]
+or 
+```{r} 
+p.values.adj<-1- (1- p.values)^m
+p.values.adj
+```
+
+More generally, if Sidak's inequality holds:
+\[
+\Pr\left(\bigcap_{i:H_i \in \mathcal{T}} \{ P_i > u \right) \geq \prod_{i: H_i \in \mathcal{T}} \Pr\left( P_i > u \right)
+\]
+for each $u\in[0,1]$ and each $\mathcal{T}\subseteq \mathcal{H}$, we can use $\tilde{\alpha} = 1-(1-\alpha)^{(1/m)}$ and obtain
+\[
+\Pr\left(\bigcap_{i: H_i \in \mathcal{T}} \{ P_i > 1-(1-\alpha)^{(1/m)}  \} \right) \geq \prod_{i: H_i\in \mathcal{T}} \Pr\left( P_i > 1-(1-\alpha)^{(1/m)}   \right) = [(1-\alpha)^{(1/m)}]^{m_0} = (1-\alpha)^{\pi_0} \geq 1-\alpha
+\]
+And then check the FWER at $\alpha$:
+\[
+\mathrm{FWER} = \Pr\left(\bigcup_{i: H_i \in \mathcal{T}} \{ P_i < 1-(1-\alpha)^{(1/m)}  \} \right) = 1- \Pr\left(\bigcap_{i: H_i \in \mathcal{T}} \{ P_i > 1-(1-\alpha)^{(1/m)}  \} \right) \leq \alpha
+\]
+
+
+Let consider the case of 2 independent tests. The empirical distribution of p-value pairs for 1000 hypothetical experiments is described as 
+
+```{r}
+p.values.manyExp=cbind(runif(5000),runif(5000))
+plot(p.values.manyExp,pch=20,col="grey",asp=1)
+abline(v=.05,col="red")
+abline(h=.05,col="red")
+```
+
+Let's try to run a simulation to verify that the FWER is really controlled at $\alpha$
+```{r} 
+B<-5000
+V<-vector("numeric", length=B)
+for (i in 1:B){
+U<-runif(m)
+V[i]<-sum(U <= alpha.adj)
+}
+mean(V>0)
+```
+
+
+# Bonferroni inequality
+
+## Dependence between tests.
+
+Variables in an experiment are often correlated with each other.
+
+```{r}
+effect.individual=rnorm(6,mean = 0,sd = sqrt(70))
+pressure.min=rnorm(6,mean = 82,sd = sqrt(30))+effect.individual
+pressure.max=rnorm(6,mean = 105,sd = sqrt(30))+effect.individual
+
+plot(pressure.min,pressure.max,col=c("black", "black", "black", "red", "red"),pch=20)
+cor(pressure.min,pressure.max)
+
+data=data.frame(drug=c("standard", "standard", "standard",
+                        "new", "new", "new"),
+                pressure.min=pressure.min,
+                pressure.max=pressure.max)
+data
+
+B=5000
+res=replicate(B,{
+  effect.individual=rnorm(6,mean = 0,sd = sqrt(70))
+  pressure.min=rnorm(6,mean = 82,sd = sqrt(30))+effect.individual
+  pressure.max=rnorm(6,mean = 105,sd = sqrt(30))+effect.individual
+  c(press.min=t.test(pressure.min[1:3],pressure.min[4:6])$p.value,
+    press.max=t.test(pressure.max[1:3],pressure.max[4:6])$p.value)
+})
+res=t(res)
+plot(res,pch=20,col="grey",asp=1)
+abline(v=.05,col="red")
+abline(h=.05,col="red")
+
+#with what probability both p-values<.05? (lower left area)
+sum((res[,1]<.05)&(res[,2]<.05))/B
+
+# how much is expected in case of test independence?
+.05*.05
+```
+
+
+## Bonferroni procedure 
+
+Carlo Emilio Bonferroni was an Italian mathematician, best known for the inequalities that takes his name.
+
+![ ](http://upload.wikimedia.org/wikipedia/commons/d/de/Carlo_Emilio_Bonferroni.jpg)
+
+Bonferroni's inequality, also known as Boole's inequality, states that for any finite or countable collection of events, the probability of at least one of the events happening is less than or equal to the sum of the probabilities of the individual events, i.e.
+
+\[
+\Pr\left(\bigcup_{i: H_i \in \mathcal{T}} E_i \right) \leq \sum_{i: H_i \in \mathcal{T}} \Pr\left( E_i \right) 
+\]
+
+so considering $E_i = \{p_i \leq \frac{\alpha}{m} \}$ we get
+
+\[
+\mathrm{FWER} = \Pr\left(\bigcup_{i: H_i \in \mathcal{T}} p_i \leq \frac{ \alpha}{m} \right) \leq \sum_{i: H_i \in \mathcal{T}}  \Pr\left( p_i \leq \frac{ \alpha}{m} \right) \leq m_0 \frac{ \alpha}{m} = \pi_0\alpha \leq \alpha
+\]
+
+that is, Bonferroni's method controls the FWER at $\alpha$. 
+
+Bonferroni's procedure is as follows:
+
+* We reject $H_i$ if $p_i \leq \tilde{\alpha} = \frac{\alpha}{m}$
+
+or equivalently.
+
+* It rejects $H_i$ if $\tilde{p}_i = \min(mp_i,1) \leq \alpha$
+
+## Example: Multiple Endpoints Data
+
+Let consider the `mtept` dataset: Measurements on four endpoints in patients in treatment (`Drug` in red) and not (`Placebo` in grey).
+
+
+
+```{r message=F, warning = FALSE}  
+require("multcomp")
+data(mtept)
+group<-mtept[,"treatment"]
+resp<-mtept[,-1]
+boxplot(resp[group=="Placebo",], at=c(1,3,5,7), xlim=c(1,8))
+boxplot(resp[group=="Drug",], at=c(2,4,6,8), col="red", add=T)
+```
+
+We conduct 4 Wilcoxon tests, one for each endpoint:
+
+```{r message=F}  
+require("multcomp")
+m<-4
+p.values<-vector("numeric", length=m)
+names(p.values)<-names(resp)
+for (i in 1:m){
+p.values[i]<-wilcox.test(resp[group=="Placebo",i], resp[group=="Drug",i])$p.value
+}
+p.values
+```
+
+We now adjust the vector of p-values by Bonferroni's method:
+
+```{r}  
+p.values.adj<-pmin(p.values*m,1)
+p.values.adj
+p.adjust(p.values,method="bonferroni")
+alpha = 0.1
+names(p.values.adj)[p.values.adj<=alpha] #names of the significant endpoints at alpha=10%
+```
+
+so the comparison between `Placebo` and `Drug` groups is significant at the $\alpha=10\%$ level for endpoint `E1`.
+
+## Example: Golub data
+
+Let us now consider *microarray* type data used in the study described by Golub et al. (1999). In this study, gene expression on $3051$ genes was measured for each patient. The $38$ patients considered are leukemia patients, and can be divided into two groups: $27$ patients with *acute lymphoblastic leukemia* (ALL, code `0`) and with $11$ *acute myeloid leukemia* (AML, code `1`). The aim of the study is to determine which genes are differentially expressed between the two groups of patients.
+
+```{r message=F, warning = FALSE} 
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+#BiocManager::install("multtest")
+
+library(multtest)
+set.seed(123)
+data(golub)
+rownames(golub)<-golub.gnames[,3]
+m<-500
+genes<-1:m # subset of genes
+response<-golub[genes,]
+group<-golub.cl
+p.values<-vector("numeric", length=m)
+names(p.values)<-rownames(response)
+for (i in 1:m){
+p.values[i]<-t.test(response[i,group==0], 
+                    response[i,group==1])$p.value
+}
+sum(p.values<=alpha) # number of rejections without multiplicity corrections
+sum(p.adjust(p.values,"bonferroni") <=alpha) # number of rejections wih Bonferroni correction
+p.values.adj <- p.adjust(p.values,"bonferroni")
+genes.sig<-names(p.values.adj)[(p.values.adj <=alpha)] # names of significant genes
+genes.sig
+boxplot(response[genes.sig[3],]~group, main=genes.sig[3]) # boxplot of the third significant genes
+```
+
+Graphically we have:
+
+```{r} 
+i<-(sort(p.values) <= alpha*(1:m)/m)
+plot(1:m, sort(p.values), xlab="i", ylab=expression(p[(i)]), col=i+1, ylim=c(0,.1))
+segments(x0=1,y0=alpha/m, x1=m,y1=alpha)
+```
+
+# Holm procedure
+
+It leads to the same rejections as Bonferroni, sometimes a few more (uniformly more powerful).
+
+It is iterative:
+
+1. Correct the p-values with Bonferroni,
+2. Reject all hypotheses with significant p-values
+3. Reiterate 1. and 2. until there are no more rejections
+
+```{r}
+sum(p.adjust(p.values,method = "bonferroni") < 0.05)/length(p.values)
+
+sum(p.adjust(p.values,method = "holm") < 0.05)/length(p.values)
+```
+
+# Exercise 1 {-}
+
+Let be 
+```{r,echo=FALSE}
+ps=c(.523,.0011,.0246,.0073)
+cat(ps)
+```
+
+the p-values resulting in the comparison of two groups in a clinical trial with four endpoints.  
+
+Perfom:
+
+- a Bonferroni correction
+- a Holm correction
+- a closed testing correction using Bonferroni combination for the combined tests 
+- at least for the Bonferroni and Holm, program a function to perform it for a general vector of p-values
+
+
+Compare the results of Closed Testing with the ones of Bonferroni and Holm.
+
+**Possible solution**
+
+```{r}
+bonferroni <- function(pv){
+  pmin(pv*length(pv),1)
+}
+```
+
+```{r}
+holm <- function(pv){
+  
+  pv_sort <- sort(pv)
+  
+  sapply(c(1:length(pv)), function(x) pv_sort[x] * (length(pv_sort)+ 1 - x))[order(order(pv))]
+}
+```
+
+
+# Exercise 2: Gatekeeping procedure {-}
+
+Consider a clinical trial with two families of null hypotheses:
+
+Family 1: Primary null hypotheses (one-sided p-values)
+$H_1$ (Endpoint 1), $p_1=0.0082$
+$H_2$ (Endpoint 2), $p_2=0.0174$
+
+Family 2: Secondary null hypotheses (one-sided p-values)
+$H_3$ (Endpoint 3), $p_3=0.0042$
+$H_4$ (Endpoint 4), $p_4=0.0180$
+
+where $p_i$ are the raw p-values.
+
+- Apply the serial gatekeeping procedure
+- Apply the parallel gatekeeping procedure
+
+**Possible solution**
+
+```{r}
+serial <- function(pvalues, alpha){
+  if(pvalues[1] < alpha & pvalues[2] < alpha){
+    
+   p.adjust(pvalues[c(3,4)], method = "holm")
+    
+  }else{
+    "Family 1 is not rejected"
+  }
+}
+```
+
+```{r}
+parallel <- function(pvalues, alpha){
+  if(pvalues[1] < alpha/2 | pvalues[2] < alpha/2){
+    
+    pvalues[c(3,4)] * 4 #Bonferroni
+    
+  }else{
+    "Family 1 is not rejected"
+  }
+}
+```
+
+
+# Exercise 3: GERD data {-}
+
+Description:  
+<http://webserv.jcu.edu/math//faculty/TShort/Bradstreet/part1/part1-table3.html>
+
+Twelve Gastroesophageal Reflux Disease (GERD) patients were allocated randomly to one of four treatment sequences of: 
+
+- 0 (placebo), 
+- 10, 
+- 20, and 
+- 40 mg 
+
+of a drug in a four period crossover design. 
+
+On the fifth (last) day of each treatment period and the study baseline period: 
+
+- the number of reflux episodes per hour (# EPS/HR), 
+- percent reflux time (% RT), 
+- the number of reflux episodes greater than five minutes in a 12 hour period (#EPS > 5'/12 HR) 
+
+were recorded for each patient using ambulatory 24-hour esophageal pH monitoring. 
+
+Measurements were taken while the patient was in the upright (U) or supine (S) positions. The time (hours) in the upright and supine positions was recorded. A seven day washout period separated the treatment periods. The data recorded in the upright and supine positions are shown in <http://webserv.jcu.edu/math//faculty/TShort/Bradstreet/part1/Bradp1t3.txt>
+
+### 3.1 A procedure with one endpoint {-}
+
+Let consider for the moment, only the endpoint *number of reflux episodes per hour (# EPS/HR)* (`EPS`), **only Supine (S)** position and the comparisons:  
+
+- $H_{10}: \mu_0 = \mu_{10}$
+- $H_{20}: \mu_0 = \mu_{20}$
+- $H_{40}: \mu_0 = \mu_{40}$
+
+a) In order to know if there is a dose response and which doses are effective, define the following multiple testing procedure:  
+
+  - $\alpha$ is splitted among the three comparisons with different weights: 
+      - $\alpha/2$ to the comparison 0 (placebo) vs 40  
+      - $\alpha/3$ to the comparison 0 (placebo) vs 20 and  
+      - $\alpha/6$ to the comparison 0 (placebo) vs 10
+  - when one hypothesis is rejected, its $\alpha$ is donated in a backward fashion: ($H_{40}$ to $H_{20}$ and $H_{20}$ to $H_{10}$)
+
+b) Verify the overall distribution of the probabilities is $\alpha$
+
+c) Is there any room for a further improvement of the procedure? if yes, make your proposal.
+
+
+**Possible solution**
+
+a)   
+
+- Test the three hypotheses at the starting levels declared above  
+- if $H_{40}$ is rejected,  $H_{20}$ is tested at level $\alpha/3+\alpha/2=5\alpha/6$
+- if $H_{20}$ is rejected,  $H_{10}$ is tested at level $\alpha/6+5\alpha/6=\alpha$
+
+b) The sum of initial $\alpha$s is $\alpha/2+\alpha/3+\alpha/6=\alpha$  
+
+c) If $H_{10}$ is rejected, the value $\alpha$ could be donated -- as an example -- to $H_{40}$ and later to $H_{20}$ 
+
+### 3.2 A procedure with two endpoints {-}
+
+a) Define now a procedure that considers also the endpoint % RT (i.e., 3 doses comparisons, 2 endpoints). One could use a gatekeeping procedure with two families defined by the two endpoints (i.e., one family, one endpoint).
+
+**Possible solution**
+
+Two possible options are:  
+
+**Test the two endpoints by means of Parallel Gatekeeping (one endpoint, one family):** that is,
+
+- test \#EPS/HR with procedure at point 3.1,  
+- if $H_{10}$ is rejected (for endpoint \#EPS/HR), perform the same procedure for % RT,  
+
+TODO: questo potremmo toglierlo. giochiamo su come investire gli alpha che tornano indietro (resto sulla stessa family come nel 3.1 o investo sulla seconda?). 
+
+**Test the two endpoints in a single family:** that is,
+use procedure at point 3.1 at $\alpha$ levels reduced by $1/2$. As an example,  $H_{40}$ in each endpoints is tested at level $\alpha/2/2=\alpha/4$ etc.
+
+
+
+### 3.3 Analyse the data {-}
+
+Analyses the data using the procedures defined at points 3.1 at significance level $\alpha=0.05$ and $\alpha=0.25$ and procedures defined at points 3.2 at level $\alpha=0.05$.
+
+Remarks: 
+
+- Use **Supine (S)** position only  
+- In this analysis you can discard the Baseline data (`Dse==Pre`), the comparison can be based `Dse==0` vs `Dse==10` (to test $H_{10}$), `Dse==0` vs `Dse==20` (to test $H_{20}$) and `Dse==0` vs `Dse==40` (to test $H_{40}$).  
+- Do not forget that measures are repeated on the same subjects (paired data?)  
+- Use `wilcox.test()`
+
+
+**Possible solution**
+
+
+```{r}
+D=read.table("http://webserv.jcu.edu/math//faculty/TShort/Bradstreet/part1/Bradp1t3.txt", header = TRUE, skip = 1)
+
+D=D[D$Pos=="S",]
+D=D[D$Dse!="Pre",]
+
+##################### 3.1: One Endpoint
+##### point a)
+
+(p40_EPS=wilcox.test( unlist(D[5,4:15]- D[8,4:15])))
+(p20_EPS=wilcox.test( unlist(D[5,4:15]- D[7,4:15])))
+(p10_EPS=wilcox.test( unlist(D[5,4:15]- D[6,4:15])))
+
+#following the solution proposed in 3.1, alpha=0.05:
+# p40_EPS = 0.01611   <= .05/2   = 0.0250  -> Reject H40_eps 
+# p20_EPS = 0.006836  <= .05/3   = 0.0167  -> Reject H20_eps 
+# p10_EPS = 0.009277  <= .05/6   = 0.0083  -> Reject H10_eps 
+
+# In this case all hypotheses are rejected, one don't need to invest the alpha.
+
+#following the solution proposed in 3.1, alpha=0.025:
+# p40_EPS = 0.01611   <= .025/2   = 0.01250  -> DON'T Reject H40_eps 
+# p20_EPS = 0.006836  <= .025/3   = 0.00833  -> Reject H20_eps 
+# p10_EPS = 0.009277  <= .025/6   = 0.00417  -> DON'T Reject H10_eps 
+# 
+# Reinvest the alpha/3 gained from H20_eps: give it to H10_eps
+# p10_EPS = 0.009277 <= .05/6+.05/3=.05/2=0.025 -> Reject H10_eps 
+
+# Note that with Holm correction we only reject H20_eps.
+
+##### point c) note that after rejection of H10_eps the alpha is not invested anymore, one could decide (apriori) to invest it in H40_eps, which surprisingly would lead to the rejection of H40_eps
+
+##################### 3.2: Two Endpoints
+
+(p40_RTperc=wilcox.test( unlist(D[1,4:15]- D[4,4:15])))
+(p20_RTperc=wilcox.test( unlist(D[1,4:15]- D[3,4:15])))
+(p10_RTperc=wilcox.test( unlist( D[1,4:15]- D[2,4:15])))
+
+
+
+#following the solution proposed in 3.2:
+
+#### Parallel Gate Keeping
+
+# p40_EPS = 0.01611  <= .05/2   = 0.025  -> Reject H40_eps and donate alphas to H20_EPS
+# p20_EPS = 0.006836 <= .05*5/6 = 0.0416 -> Reject H20_eps and donate alphas to H10_EPS
+# p10_EPS = 0.009277 <= .05              -> Reject H10_eps and donate alphas to H40_RTperc
+
+# p40_RTperc = 0.04545  > .05/2 = 0.0250 -> DON'T Reject H40_RTperc (and don't donate alphas)
+# p20_RTperc = 0.04545  > .05/3 = 0.0167 -> DON'T Reject H20_RTperc (and don't donate alphas)
+# p10_RTperc = 0.2036   > .05/6 = 0.0083->  DON'T Reject H10_RTperc
+
+
+
+#### Same family
+
+# p40_EPS = 0.01611  >   .05/4 = 0.0125            -> DON'T Reject H40_eps (and don't donate alphas)
+# p20_EPS = 0.006836 <=  .05/6 = 0.0083            -> Reject H20_eps and donate alphas to H10_EPS
+# p10_EPS = 0.009277 <=  .05/12+.05/6=.05/4=0.0125 -> Reject H10_eps 
+
+# p40_RTperc = 0.04545  > .05*4/6 = 0.0333         -> DON'T Reject H40_RTperc (and don't donate alphas)
+# p20_RTperc = 0.04545 <=  .05/6 = 0.0083            -> DON'T Reject H20_RTperc (and don't donate alphas)
+# p10_RTperc = 0.2036  <=  .05/12+.05/6=.05/4=0.0125 -> DON'T Reject H10_RTperc 
+
+#### point b) Similarly to point 3.1.c, in sequential procedure, when H10_RTperc is rejected, its alpha could be given to other hypotheses. In parallel procedure the same reasoning holds for H10_RTperc and H10_EPS.
+
+
+#### Note that with Holm correction .05/6 only H20_eps is Rejected
+
+```
+
+# Post-Hoc
+
+We analyze the `litter` dataset where four dosages ($0$, $5$, $50$, $500$) are administrated to pregenant mice and their litters were evaluated for birth weights as average post-birth weights in the entire litter.
+
+We perform one test for each comparison (i.e., $5$ versus $0$, $50$ versus $0$, $500$ versus $0$, $50$ versus $5$ and so on).
+
+```{r}
+library(multcomp)
+data(litter)
+head(litter)
+#### Let see the distribution of weights across different dosages
+boxplot(weight~dose,data=litter,col="red")
+
+#### Here we perform an analysis of variance, but we are interested on post-hoc comparison
+amod <- aov(weight ~ dose + gesttime + number, data = litter)
+
+### Define matrix of linear hypotheses for 'dose'
+K <- contrMat(table(litter$dose), "Tukey")
+
+### Set up multiple comparison object
+Kht <- glht(amod, linfct = mcp(dose = K), alternative = "less")
+
+summary(Kht, test = univariate())
+summary(Kht, test = adjusted("bonferroni"))
+summary(Kht, test = adjusted("holm"))
+```
+
+## Exercise 4: PlantGrowth data {-}
+
+Consider the `PlantGrowth` in `library(datasets)`:
+
+Results from an experiment to compare yields (as measured by dried weight of plants) obtained under a control and two different treatment conditions.
+
+```{r}
+data(PlantGrowth)
+#?PlantGrowth
+str(PlantGrowth)
+```
+
+We are interested in all possible pair-wise comparisons of the three groups.
+Perform a parametric analysis and correct for post-hoc (i.e. multiple testing) using
+
+- Bonferroni
+- Holm
+
+Do this without the help of `library(multcomp)` (or any other specialized libraries/softwares), also showing step-by-step the calculation performed.
+
+Compare your results with the ones of `library(multcomp)` (or any other specialized libraries/softwares).
+
+
+**Possible solution**
+
+```{r}
+pv1 <- t.test(PlantGrowth$weight[PlantGrowth$group == "ctrl"],PlantGrowth$weight[PlantGrowth$group == "trt1"])$p.value
+
+pv2 <- t.test(PlantGrowth$weight[PlantGrowth$group == "ctrl"],PlantGrowth$weight[PlantGrowth$group == "trt2"])$p.value
+
+pv3 <- t.test(PlantGrowth$weight[PlantGrowth$group == "trt1"],PlantGrowth$weight[PlantGrowth$group == "trt2"])$p.value
+
+p.adjust(c(pv1,pv2,pv3), method = "bonferroni")
+
+p.adjust(c(pv1,pv2,pv3), method = "holm")
+```
+
+using `library(multcomp)`:
+
+```{r}
+library(multcomp)
+amod <- aov(weight ~ group, data = PlantGrowth)
+
+Kht <- glht(amod, linfct = mcp(group = c("ctrl - trt1 = 0", 
+                                         "ctrl - trt2 = 0", 
+                                         "trt1 - trt2 = 0")))
+
+
+summary(Kht, test = adjusted("bonferroni"))
+summary(Kht, test = adjusted("holm"))
+```
+
+
+## Exercise 5: InsectSprays data {-}
+
+Consider the `InsectSprays` in `library(datasets)`:
+
+The counts of insects in agricultural experimental units treated with different insecticides.
+
+```{r}
+data(InsectSprays)
+#?InsectSprays
+str(InsectSprays)
+```
+
+Same task as Exercise Two.
+
+# Exercise 6 {-}
+
+Consider the last simulations of the first laboratory, i.e., multiple endpoints ($18$) where the first $5$ endpoints are significant across $1000$ clinical trials:
+
+1. The empirical distribution of the number of rejections using the correction of Bonferroni, and Holm
+
+2. the fraction of experiments in which at least one error was committed
+  
+**Possible solution**  
+  
+```{r}
+m=18
+B=1000
+alpha = 0.05
+
+simulate.1.experiment <- function(){
+####  Generate the response of 6 patients across m endpoints from a normal distribution with mean 0 and sd 1.
+   endpoints=matrix(rnorm(6*m),6,m)
+####  Generate the response of 6 patients across m endpoints from a normal distribution with mean 0 and sd 1.
+   endpoints[4:6,1:5]= endpoints[4:6,1:5]+5
+   endpoints
+  
+   
+   p.values.1.experiment=apply(endpoints , 2, function(y)
+#### Compute two samples t-test and extract p-value      
+     t.test(y[1:3],y[4:6])$p.value)
+
+#### Compute p-values adjusted by Bonferroni, Holm and BH
+   p.bonf <- p.adjust(p.values.1.experiment,method = "bonferroni")
+   p.holm <- p.adjust(p.values.1.experiment,method = "holm")
+
+#### Compute FWER and power from function compute.err.pow
+   c(bonf=compute.err.pow(p.bonf),
+     holm=compute.err.pow(p.holm))
+  }
+
+#### Compute FWER and power
+compute.err.pow <- function(p.values){
+  
+  c(Atleastoneerror=any(p.values[-(1:5)]<alpha),
+     power=sum(p.values[(1:5)]<alpha)/5)
+}
+
+res <- replicate(B,simulate.1.experiment())
+
+out=matrix(rowMeans(res),2,2)
+colnames(out)=c("bonf","holm")
+rownames(out)=c("FWER","POWER")
+out
+```
+
+
+
+
+

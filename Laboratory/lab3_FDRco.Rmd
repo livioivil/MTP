@@ -1,0 +1,264 @@
+---
+title: "The Labyrinth of Multiple Testing: how to avoid the pitfall of false positives"
+subtitle: "FDR control"
+author: "Livio Finos and Angela Andreella"
+highlighter: highlight.js
+job: Università degli Studi di Padova
+output:
+  prettydoc::html_pretty:
+    theme: leonids 
+    highlight: github
+    df_print: paged
+    toc: true
+    number_sections: true
+fontsize: 11pt
+geometry: margin = 1in
+mode: selfcontained
+hitheme: tomorrow
+framework: io2012
+widgets: []
+---
+
+# False Discovery Rate
+
+
+Consider a set of null hypotheses $\mathcal{H}=(H_1,\ldots,H_m)$, of which an unknown number $m_0$ are true, while the remaining $m_1=m-m_0$ are false. We can summarize the number of errors made by a *multiple testing* procedure in the following table:
+
+Assumptions | False | True | Total
+------------- | ------------- | ------------- | -------------
+rejected | $S$ | $V$ | $R$ 
+not rejected | $T$ | $U$ | $m-R$
+total | $m_1$ | $m_0$ | $m$
+
+
+We now define the *false discovery proportion* $\mathrm{FDP}$ as. 
+$$\mathrm{FDP} = \left\{\begin{array}{ll} V/R & \mathrm{if}\quad R>0\\ 0 & \mathrm{if}\quad  R=0 \end{array}\right.$$
+which represents the ratio of the number of type I errors to the total number of rejected hypotheses (defined as 0 if no hypotheses are rejected), i.e., the proportion of type I errors.
+
+Previously, we had defined the *familywise error rate* as the probability of committing at least one error of the first kind, i.e. $\Pr(V>0)$. Controlling the *familywise error rate* at $\alpha$ requires:
+\[
+\Pr(V>0) \leq \alpha
+\]
+We now introduce a new error rate, the *false discovery rate* (FDR), defined as $\mathbb{E}(\mathrm{FDP})$.
+Controlling the *false discovery rate* at $\alpha$ requires:
+\[
+\mathbb{E}(\mathrm{FDP}) \leq \alpha.
+\]
+
+FDR control procedures exert less stringent control than FWER control procedures (such as Bonferroni correction), which seek to control the probability of at least one I-type error ($\Pr(V>0)$) as opposed to controlling the expected value of the proportion of type I errors $\mathbb{E}(\mathrm{FDP})$. 
+
+In fact, since $0\leq \mathrm{FDP} \leq 1$, we have: 
+\[
+\mathbb{E}(\mathrm{FDP}) \leq \Pr(\mathrm{FDP}>0)
+\]
+which implies that the control of FWER also guarantees the control of FDR.
+
+Consequently, we can expect the procedures for checking FDR to be more powerful than the procedures for checking FWER, i.e., to reject more hypotheses. 
+
+In practice, methods for checking FDR are particularly more powerful than methods for checking FWER in the presence of many false null hypotheses. In contrast, if all null hypotheses are true, FDR and FWER are identical. In fact, in this case we have $R = V$, so $\mathrm{FDP}$ is a
+Bernoulli random variable. It follows that
+\[
+\mathbb{E}(\mathrm{FDP}) = \Pr(\mathrm{FDP} > 0)
+\]
+
+In addition, if there is only one hypothesis ($m = 1$), the two error rates are identical.
+
+# Benjamini-Hochberg procedure.
+
+Let $p_{(1)},\ldots,p_{(m)}$ be the non-decreasingly ordered p-values, i.e., $p_{(1)} \leq \ldots \leq p_{(m)}$. For a given $\alpha$,the Benjamini-Hochberg (BH) procedure controls $\mathrm{FDR}$ as follows:
+
+* If $p_{(i)} > \frac {i\alpha}{m}$ for any $i=1,\ldots,m$, no hypothesis is rejected.
+
+* Otherwise, let $$k = \max\Big\{i: p_{(i)} \leq \frac{i\alpha}{m} \Big\}$$
+* one rejects $H_i$ when $p_i \leq \tilde{\alpha}= \Large\frac {k \alpha}{m}$
+
+Under the assumption that the p-values are either independent or positively dependent the BH procedure checks the FDR at the $\pi_0\alpha$ level:
+
+\[
+E(Q)\leq \pi_0 \alpha \leq \alpha.
+\]
+
+```{r} 
+alpha <- 0.05
+pvals <- c(0.03000,0.0002, 0.05912, 0.08226, 0.00388, 0.0184, 0.03490)
+m<-length(pvals)
+names(pvals)<-LETTERS[1:m]
+pvals
+pvals.ord<-sort(pvals) # p-values sorted
+pvals.ord
+(1:m)[(pvals.ord <= alpha*(1:m)/m)] # indexes i
+k<-max( (1:m)*(pvals.ord <= alpha*(1:m)/m) ) # k = max(indexes i)
+k
+alpha.adj<-(alpha*(1:m)/m)[k] # adjusted alpha level
+alpha.adj
+hyps.reject<-names(pvals)[pvals<=alpha.adj] # names hypothesis rejected
+hyps.reject
+```
+
+Equivalently, we can consider the rejection rule:
+
+* we reject the hypothesis $H_{(i)}$ when $\tilde{p}_{(i)} \leq \alpha$
+
+where 
+\[
+\tilde{p}_{(i)} = \min_{j=i,\ldots,m}\Big(p_{(j)}\cdot\frac{m}{j} ,1\Big)
+\]
+
+```{r} 
+pvals.ord.adj<-pvals.ord * m/(1:m)
+for (i in 1:m){
+pvals.ord.adj[i]<-min(pvals.ord.adj[i:m],1)
+}
+pvals.ord.adj # adjusted p-values
+pvals.ord.adj[names(pvals)] # initial sorting
+pvals.adj<-p.adjust(pvals,method="BH")
+pvals.adj
+```
+
+
+Graphically we have
+```{r} 
+i<-(pvals.ord <= alpha*(1:m)/m)
+plot(1:m, pvals.ord, xlab="i", ylab=expression(p[(i)]), col=i+1)
+segments(x0=1,y0=alpha/m, x1=m,y1=alpha)
+abline(h=alpha.adj, lty="dotted")
+```
+
+For comparison, if we use Bonferroni's method we reject
+```{r} 
+hyps.reject.Bonf<-names(pvals)[pvals<=alpha/m]
+hyps.reject.Bonf
+```
+
+
+# Benjamini-Yekutieli procedure.
+
+In short, the Benjamini-Yekutieli (BY) procedure is a conservative version of BH since it deals with any p-values correlation structure. We consider the following rejection rule:
+
+* we reject the hypothesis $H_{(i)}$ when $\tilde{p}_{(i)} \leq \alpha$ 
+where 
+\[
+\tilde{p}_{(i)} = \min_{j=i,\ldots,m}\Big(p_{(j)}\cdot\frac{m L}{j} ,1\Big)
+\]
+
+with $L=\sum_{j=1}^{m} 1/j$ 
+
+```{r}
+pvals.adj<-p.adjust(pvals,method="BY")
+pvals.adj
+```
+
+```{r}
+sum(pvals.adj <= 0.05)
+```
+Graphically we have
+```{r} 
+L <- sum(1/(1:m))
+pvals.ord<-sort(pvals) # p-values sorted
+i<-(pvals.ord <= alpha*(1:m)/(m*L))
+plot(1:m, pvals.ord, xlab="i", ylab=expression(p[(i)]), col=i+1)
+segments(x0=1,y0=alpha/m, x1=m,y1=alpha)
+abline(h=alpha.adj, lty="dotted")
+```
+
+# Exercise 1 {-}
+
+Consider the last simulations of the first laboratory, i.e., multiple endpoints ($18$) where the first $5$ endpoints are significant across $1000$ clinical trials. Compute:
+
+1. The empirical distribution of the number of rejections using the correction of Bonferroni, Holm (as in the previous laboratory), BH and BY;
+
+2. The fraction of experiments in which at least one error was committed.
+
+```{r}
+m=18
+B=1000
+
+
+simulate.1.experiment <- function(){
+####  Generate the response of 6 patients across m endpoints from a normal
+####  distribution with mean 0 and sd 1.
+   endpoints=matrix(rnorm(6*m),6,m)
+####  Add a value equals 3 for the first 5 endpoints for the patients
+#### taking the new drug
+   endpoints[4:6,1:5]= endpoints[4:6,1:5]+5
+   endpoints
+  
+   p.values.1.experiment=apply(endpoints , 2, function(y)   
+    
+#### Compute two samples t-test and extract p-value    
+   t.test(y[1:3],y[4:6])$p.value)
+   
+#### Compute p-values adjusted by Bonferroni, Holm and BH
+   p.bonf <- p.adjust(p.values.1.experiment,method = "bonferroni")
+   p.holm <- p.adjust(p.values.1.experiment,method = "holm")
+   p.bh <- p.adjust(p.values.1.experiment,method = "BH")
+   p.by <- p.adjust(p.values.1.experiment,method = "BY")
+   
+#### Compute errors and power from function compute.err.pow
+   c(bonf=compute.err.pow(p.bonf),
+     holm=compute.err.pow(p.holm),
+     bh=compute.err.pow(p.bh),
+     by=compute.err.pow(p.by))
+  }
+
+#### Compute errors and power
+compute.err.pow <- function(p.values){
+  
+  c(Atleastoneerror=any(p.values[-(1:5)]<alpha),
+     fdp=sum(p.values[-(1:5)]<alpha)/max(1,sum(p.values<alpha)),
+     power=sum(p.values[(1:5)]<alpha)/5)
+}
+
+#### We replicate the analysis 1000 times
+res <- replicate(B,simulate.1.experiment())
+dim(res)
+
+res[1:2,1:20]
+
+rowMeans(res)
+
+boxplot(res[8,])
+
+out=matrix(rowMeans(res),3,4)
+colnames(out)=c("bonf","holm","bh", "by")
+rownames(out)=c("FWER","FDR","POWER")
+out
+```
+
+# Exercise 2 {-}
+
+Given the following p-values
+
+```{r,echo=FALSE}
+set.seed(1)
+ps=c(.002, .005, .015, .113, .222, .3, .454, .552, .663, .751)
+
+
+cat(ps,sep=", ")
+```
+
+- compute the adjusted p-values using Benjamini-Hochberg (FDR controlling) procedure and show the steps needed.
+- run the analysis using `p.adjust` and verify that you get the same results.
+
+
+**Possible solution**
+
+```{r}
+ps_sort <- sort(ps)
+
+pmin(c((ps_sort * length(ps)) /c(1:length(ps))),1)[order(order(ps))]
+
+
+L = sum(1/seq(length(ps)))
+pmin(c((ps_sort * length(ps_sort) * L) /c(1:length(ps_sort))),1)[order(order(ps))]
+
+```
+
+
+```{r}
+p.adjust(ps, method = "BH")
+p.adjust(ps, method = "BY")
+```
+
+
+
